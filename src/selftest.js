@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { analyzeRequest, analyzeSession, biggestMessages, classifyKey, decomposeRequest } from "./analyze.js";
 import { findLatestSession, readJsonRequest, readSession, stripBanner } from "./parse.js";
+import { prescribe } from "./prescribe.js";
 import { estimateTokens } from "./tokens.js";
 
 export function selftest() {
@@ -130,6 +131,55 @@ export function selftest() {
     eq(r.turns.length, 3);
     eq(r.totalEvents, 9);
     eq(r.preludeEvents, 1);
+  });
+
+  // ---- prescription ----
+  check("no prescription when the body already fits", () => {
+    const body = { messages: [{ role: "user", content: "hi" }] };
+    const a = analyzeRequest(body, { window: 1_000_000 });
+    const p = prescribe(body, a, { window: 1_000_000 });
+    eq(p.needed, false);
+    eq(p.steps.length, 0);
+  });
+
+  check("caps a dominant hidden field first (safe step)", () => {
+    const body = { messages: [{ role: "user", content: "hi" }], dsh_session_log: "字".repeat(600_000) };
+    const a = analyzeRequest(body, { window: 200_000 });
+    const p = prescribe(body, a, { window: 200_000 });
+    ok(p.steps.length > 0, "should propose at least one step");
+    eq(p.steps[0].kind, "cap-field");
+    eq(p.steps[0].risk, "safe");
+    ok(p.fitsByPlan, `plan should fit, after=${p.after}`);
+  });
+
+  check("drops the largest tool when there is no hidden field", () => {
+    const body = {
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ function: { name: "big", description: "x".repeat(40_000) } }],
+    };
+    const a = analyzeRequest(body, { window: 2_000 });
+    const p = prescribe(body, a, { window: 2_000 });
+    ok(p.steps.some((s) => s.kind === "drop-tool" && s.name === "big"), "should drop tool 'big'");
+    ok(p.fitsByPlan, "dropping the tool should make it fit");
+  });
+
+  check("folds oldest history and labels risk", () => {
+    const messages = Array.from({ length: 20 }, (_, i) => ({ role: "user", content: `m${i}`.padEnd(4_000, "y") }));
+    const body = { messages };
+    const a = analyzeRequest(body, { window: 12_000 });
+    const p = prescribe(body, a, { window: 12_000 });
+    const fold = p.steps.find((s) => s.kind === "fold-history");
+    ok(fold, "should propose folding");
+    ok(fold.folded > 0 && fold.folded < 20);
+    ok(p.after <= 12_000, `should fit after folding, got ${p.after}`);
+  });
+
+  check("flags an oversized single message as unsplittable", () => {
+    const body = { messages: [{ role: "user", content: "z".repeat(2_000_000) }] };
+    const a = analyzeRequest(body, { window: 100_000 });
+    const p = prescribe(body, a, { window: 100_000 });
+    ok(p.unsplittable, "should report unsplittable");
+    eq(p.fitsByPlan, false);
   });
 
   // ---- parsing ----

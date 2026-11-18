@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { analyzeRequest, analyzeSession } from "./analyze.js";
 import { findLatestSession, readJsonRequest, readSession } from "./parse.js";
+import { prescribe } from "./prescribe.js";
 import { fmtBytes, fmtTokens } from "./tokens.js";
 import { selftest } from "./selftest.js";
 
@@ -50,9 +51,11 @@ function has(name) {
 
 function cmdRequest(file) {
   const body = readJsonRequest(file);
-  const r = analyzeRequest(body, { window: opt("--window", 1_048_576) });
+  const window = opt("--window", 1_048_576);
+  const r = analyzeRequest(body, { window });
+  const plan = prescribe(body, r, { window });
   if (has("--json")) {
-    console.log(JSON.stringify({ ...r, parts: r.parts.map(({ value, ...p }) => p) }, null, 2));
+    console.log(JSON.stringify({ ...r, parts: r.parts.map(({ value, ...p }) => p), prescription: plan }, null, 2));
   } else {
     console.log(`request   ${file}`);
     console.log(
@@ -77,6 +80,20 @@ function cmdRequest(file) {
       for (const m of r.biggest) {
         console.log(`  #${String(m.index).padEnd(4)} ${String(m.role).padEnd(10)} ${fmtBytes(m.bytes).padStart(10)}  ~${fmtTokens(m.tokens)}`);
       }
+    }
+    if (r.overflow || has("--prescribe")) {
+      console.log(`\n处方（不同改动的最小组合，按风险从低到高）`);
+      if (!plan.steps.length && !plan.unsplittable) {
+        console.log("  装得下，不用改");
+      }
+      for (const s of plan.steps) {
+        console.log(`  ${s.risk.padEnd(6)} −${fmtTokens(s.saves).padStart(7)}  ${s.note}`);
+      }
+      if (plan.unsplittable) console.log(`  ${plan.unsplittable}`);
+      const tail = plan.fitsByPlan
+        ? `→ 按此执行后 ~${fmtTokens(plan.after)} tok，装得下 ${fmtTokens(plan.window)}`
+        : `→ 按此执行后仍 ~${fmtTokens(plan.after)} tok，超出 ${fmtTokens(plan.after - plan.window)}`;
+      console.log(`  ${tail}`);
     }
   }
   return r.overflow ? 1 : 0;

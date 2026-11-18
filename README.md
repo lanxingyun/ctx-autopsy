@@ -31,7 +31,9 @@ messages ~552,091 · tools[] ~15,184 · system ~7,109 · other ~1,640,822
 - 它不在 `messages` 里 ⇒ 数消息的工具看不见；压缩器只折叠对话 ⇒ 也碰不到它。
 - 事故现场只有两个文件：一份请求体 dump、一份跑完的会话日志。它们已经在那里了。
 
-`ctx-autopsy` 只做这两件事，并且**只读本地文件**：把请求体按**顶层字段**拆开（隐藏字段才会现形），把会话日志按**轮次**拆开（并摘出最后一条 `turn/end` 的错误原文）。
+`ctx-autopsy` 只做两件事，并且**只读本地文件**：把请求体按**顶层字段**拆开（隐藏字段才会现形），把会话日志按**轮次**拆开（并摘出最后一条 `turn/end` 的错误原文）。
+
+它还多做一件现有工具不做的事：**给处方**——不是"窗口里都是什么"，而是"最小改哪一处，这次就不会爆"，按风险分三档（加隐藏字段上限 / 删大工具定义 / 折叠最旧历史），并算清执行后还差多少。
 
 ```
 $ ctx-autopsy request req-1794904316247-....json
@@ -47,6 +49,27 @@ by top-level field
   dsh_session_log — ~1.64M tok (45.4%)
 ```
 
+## 处方：最小改哪一处
+
+```bash
+ctx-autopsy request body.json --window 200000
+```
+
+```
+total     924.2 KiB · ~248.0k tok · window 200.0k · OVER by ~48.0k
+
+处方（不同改动的最小组合，按风险从低到高）
+  medium −  48.3k  折叠最旧的 39/160 条消息（会丢掉早期上下文）
+  → 按此执行后 ~199.7k tok，装得下 200.0k
+```
+
+原则：
+
+- **安全档（cap-field）**：只对超过 512 KiB 的请求级隐藏字段提议——它通常不是对话内容，压它不丢上下文。
+- **中等档（drop-tool）**：只建议"省得动"的工具定义（省不到缺口 2% 的不值得用能力面去换）。
+- **有损档（fold-history）**：折叠最旧的消息，按比例标 `medium`/`high` 风险。
+- **救不了的情况会明说**：单条消息本身就超过窗口时，折叠等于截断内容——必须让生产方拆分那条消息。
+
 ## 安装
 
 尚未发布 npm。现在：
@@ -55,7 +78,7 @@ by top-level field
 git clone https://github.com/lanxingyun/ctx-autopsy
 cd ctx-autopsy
 node src/cli.js --help
-node test/run.js        # 16 条自测
+node test/run.js        # 21 条自测
 ```
 
 要求 Node ≥ 22（用内置 `zlib.zstdDecompressSync` 读 `.jsonl.zstd`，不需要 zstd CLI）。
@@ -95,6 +118,7 @@ ctx-autopsy session file --top 10 --json
 
 - **按顶层字段拆**，而不是只数 `messages`。分类：`messages` / `system` / `tools` / `hidden`。大头经常在 `hidden`。
 - **按轮次拆会话**：用 `data.turn` / `data.turnId` 归组（没有就沿用上一轮），第一轮之前的事件单独计为 `prelude`，不污染轮表。
+- **处方**：先试安全档，再试材料档（省得动的工具），最后才折叠历史；每步都算"执行后还剩多少"。
 - **token 估算（CJK 感知）**：CJK 字符 ≈ 1 token/字，其余 ≈ 4 字符/token。与 provider usage 行偏差约 ±15%——判断"谁在吃窗口"够用，报销不够。
 - **压缩边界**：标出"单条最大消息"和"非对话字段"，因为这两类是压缩器压不动的。
 
@@ -117,8 +141,9 @@ ctx-autopsy session file --top 10 --json
 
 `ctx-autopsy` is a **post-mortem** tool for dead agent sessions. Given a saved request body or a finished
 session log, it decomposes the *top-level* request fields (most tools only count `messages`, so request-level
-hidden fields stay invisible) and groups session events by turn, surfacing the last error verbatim. No proxy,
-no replay, no integration — it reads files you already have.
+hidden fields stay invisible) and groups session events by turn, surfacing the last error verbatim. It also
+**prescribes the smallest fix**: cap a hidden field, drop an oversized tool definition, or fold the oldest
+history — ranked by risk, with the resulting size computed. No proxy, no replay, no integration.
 
 If you want live capture, a UI, or per-tool composition over time, use
 [context-lens](https://github.com/larsderidder/context-lens). If you want cost aggregation, use
