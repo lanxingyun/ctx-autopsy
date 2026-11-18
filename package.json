@@ -1,10 +1,10 @@
 {
-  "name": "ctxlens",
-  "version": "0.1.0",
-  "description": "Where your agent's context went — and why it died. Local forensics for LLM request payloads and agent session logs.",
+  "name": "ctx-autopsy",
+  "version": "0.1.1",
+  "description": "Post-mortem for dead agent sessions: read a saved LLM request body or session log and see where the tokens went and why it died. No proxy, no replay.",
   "type": "module",
   "bin": {
-    "ctxlens": "src/cli.js"
+    "ctx-autopsy": "src/cli.js"
   },
   "scripts": {
     "test": "node test/run.js",
@@ -19,7 +19,8 @@
     "agent",
     "forensics",
     "tokens",
-    "debugging"
+    "debugging",
+    "postmortem"
   ],
   "license": "MIT",
   "files": [

@@ -1,31 +1,40 @@
-# ctxlens
+# ctx-autopsy
 
-**你的 agent 上下文去了哪，以及它为什么死。**
-
-一个零依赖的本地 CLI：读 LLM 请求体快照或 agent 会话日志，按**顶层字段**和**轮次**把 token 账算清楚。
-不接 SDK、不开代理、不上传任何东西。
+**验尸，不是观测。** 你手里已经有一具尸体——一次保存下来的请求体、一份跑完的会话日志——它告诉你 token 去了哪、哪一轮开始失控、最后为什么死。**不代理、不重放、不接 SDK。**
 
 ```bash
-ctxlens request  req-*.json          # 一次请求体：谁在吃窗口
-ctxlens session  session.v4.jsonl.zstd --latest   # 会话日志：哪一轮开始失控、最后为什么死
+ctx-autopsy request  req-*.json                  # 一次请求体：按顶层字段拆
+ctx-autopsy session  session.v4.jsonl.zstd       # 会话日志：按轮次拆 + 最后一条错误
 ```
 
-## 为什么需要它
+## 先读这个：已有的工具（2026-11-19 核查）
 
-一次真实事故：请求体 2,215,206 token 撞穿 1,048,576 窗口，发送被拦住。官方错误里写着：
+这个方向不是空的。下面三个都比本工具成熟，如果你的需求落在它们的范围里，**请直接用它们**：
+
+| 项目 | 规模 | 它解决什么 | 它不做什么 |
+|---|---|---|---|
+| [larsderidder/context-lens](https://github.com/larsderidder/context-lens) | 405★，活跃 | 本地代理抓每一次 API 调用，按 system / tools / 历史 / 工具结果 / thinking 做构成分析，带 UI，支持 Claude Code、Codex、Gemini CLI、Cline、Aider 等 | 需要**经过它的代理**；不读你已有的死会话日志或旧 dump |
+| [ccusage/ccusage](https://github.com/ccusage/ccusage) | 19.5k★ | 从各 agent 的本地用量文件汇总每日/每月/每会话的 token 与成本 | 只汇总用量，不做请求体字段构成，不回答"这次为什么爆" |
+| [dabit3/ctxlens](https://github.com/dabit3/ctxlens) | 14★ | 静态分析磁盘上的文件占用多少 token，估算上下文压力 | 分析的是**你的源码目录**，不是一次真实请求体 |
+
+## 那为什么还有这个
+
+因为有一类事故，上面三个都接不上：**会话已经死了，代理从来没在链路里。**
+
+真实案例：请求体 2,215,206 token 撞穿 1,048,576 窗口，发送被拦住。官方错误里写着：
 
 ```
 messages ~552,091 · tools[] ~15,184 · system ~7,109 · other ~1,640,822
 ```
 
-**messages 只占四分之一。** 剩下的 1.64M 在一个隐藏字段里（`dsh_session_log`），
-它不在 `messages` 里，所以所有"数消息"的工具都看不见它；而压缩器也只折叠对话，
-碰不到这种请求级字段。排查花了几小时，最后是靠 dump 拆字段定位的。
+- `messages` 只占四分之一，剩下 1.64M 在一个**请求级隐藏字段**里（`dsh_session_log`）。
+- 它不在 `messages` 里 ⇒ 数消息的工具看不见；压缩器只折叠对话 ⇒ 也碰不到它。
+- 事故现场只有两个文件：一份请求体 dump、一份跑完的会话日志。它们已经在那里了。
 
-如果当时有 `ctxlens`，这一步是 30 秒：
+`ctx-autopsy` 只做这两件事，并且**只读本地文件**：把请求体按**顶层字段**拆开（隐藏字段才会现形），把会话日志按**轮次**拆开（并摘出最后一条 `turn/end` 的错误原文）。
 
 ```
-$ ctxlens request req-1794904316247-....json
+$ ctx-autopsy request req-1794904316247-....json
 total     18.0 MiB · ~2.2M tok · window 1.05M · OVER by ~1.17M
 
 by top-level field
@@ -40,10 +49,11 @@ by top-level field
 
 ## 安装
 
-还没有发布到 npm。现在：
+尚未发布 npm。现在：
 
 ```bash
-git clone <repo> && cd ctxlens
+git clone https://github.com/lanxingyun/ctx-autopsy
+cd ctx-autopsy
 node src/cli.js --help
 node test/run.js        # 16 条自测
 ```
@@ -52,25 +62,24 @@ node test/run.js        # 16 条自测
 
 ## 用法
 
-### 请求体
+### 请求体（验尸主体）
 
 ```bash
-ctxlens request body.json
-ctxlens request body.json --window 200000 --json
+ctx-autopsy request body.json
+ctx-autopsy request body.json --window 200000 --json
 ```
 
-输出：顶层字段字节 / token / 占比；`⚠ 非对话字段`；单条最大消息（压缩的原子单位，压不动的就是它们）。
+输出：顶层字段的字节 / token / 占比；`⚠ 非对话字段`；单条最大消息（压缩的原子单位，压不动的就是它们）。
 
 ### 会话日志
 
 ```bash
-ctxlens session ~/.dsh/sessions/.../session.v4.jsonl.zstd
-ctxlens session --latest            # 取最新的
-ctxlens session file --top 10 --json
+ctx-autopsy session ~/.dsh/sessions/.../session.v4.jsonl.zstd
+ctx-autopsy session --latest            # 取最新的
+ctx-autopsy session file --top 10 --json
 ```
 
-输出：事件数、轮次数、累积 token（**日志累积，不是请求大小**）、最后一条 `turn/end` 的错误原文、
-最重的几轮。支持明文 `.jsonl` 与压缩 `.jsonl.zstd`，坏行只计数不中断。
+输出：事件数、轮次数、累积 token（**日志累积，不是请求大小**）、最后一条 `turn/end` 的错误原文、最重的几轮。支持明文 `.jsonl` 与压缩 `.jsonl.zstd`，坏行只计数不中断。
 
 ### 退出码
 
@@ -80,48 +89,40 @@ ctxlens session file --top 10 --json
 | 1 | 请求超窗，或会话里有一次超窗发送失败（`413` / `outbound body`） |
 | 2 | 用法或解析错误 |
 
-可以直接接进 CI：`ctxlens request body.json || echo "context budget exceeded"`。
+可接进 CI：`ctx-autopsy request body.json \|\| echo "context budget exceeded"`。
 
 ## 它是怎么算的
 
-- **按顶层字段拆**，而不是只数 `messages`。分类：`messages` / `system` / `tools` / `hidden`。
-  大头经常在 `hidden`。
-- **按轮次拆会话**：用 `data.turn` / `data.turnId` 归组（没有就沿用上一轮），
-  第一轮之前的事件单独计为 `prelude`，不污染轮表。
-- **token 估算（CJK 感知）**：CJK 字符 ≈ 1 token/字，其余 ≈ 4 字符/token。
-  与 provider 的 usage 行偏差约 ±15%——用来判断"谁在吃窗口"够用，用来报销不够。
-  绝对数请看 API 返回的 usage。
-- **压缩边界**：标出"单条最大消息"和"非对话字段"，因为这两类东西是压缩器压不动的。
+- **按顶层字段拆**，而不是只数 `messages`。分类：`messages` / `system` / `tools` / `hidden`。大头经常在 `hidden`。
+- **按轮次拆会话**：用 `data.turn` / `data.turnId` 归组（没有就沿用上一轮），第一轮之前的事件单独计为 `prelude`，不污染轮表。
+- **token 估算（CJK 感知）**：CJK 字符 ≈ 1 token/字，其余 ≈ 4 字符/token。与 provider usage 行偏差约 ±15%——判断"谁在吃窗口"够用，报销不够。
+- **压缩边界**：标出"单条最大消息"和"非对话字段"，因为这两类是压缩器压不动的。
 
 ## 边界（先说不行的）
 
-- **估算不是账单。** ±15% 是常态；不同 tokenizer 对代码、emoji、数字的切法差更多。
-- **会话累积 ≠ 请求大小。** 压缩会把旧历史折叠，请求体里还有日志中没有的字段。
-  `session` 模式的累积值只作量级参考；要判断具体一次请求，用 `request` 模式。
-- **只读本地文件。** 不连 API、不读进程内存、不代理流量。
-- **只认通用结构。** 各家的会话事件格式不同，本工具只依赖"每行一个对象 + 可能有 data.turn"，
-  特殊字段请用 `--json` 自己再加工。
+- **估算不是账单。** ±15% 是常态。
+- **会话累积 ≠ 请求大小。** 压缩会折叠旧历史，请求里还有日志中没有的字段。`session` 的累积值只作量级参考。
+- **只读本地文件。** 不连 API、不读进程内存、不代理流量、不重放。
+- **只认通用结构。** 只依赖"每行一个对象 + 可能有 data.turn"，特殊字段用 `--json` 自己再加工。
+- **没有可视化、没有持续观测、没有多工具接入。** 那是 context-lens 的活。
 
 ## 设计约束
 
 - 零运行时依赖（Node 内置模块）。
 - 只读：不写、不改、不上传。
 - 单一入口：`src/cli.js`；核心逻辑在 `src/analyze.js`（纯函数，可被别处引用）。
-- 自测测真函数，合成数据复现真实事故形状（含 413 的 `turn/end` 错误、banner 前缀的 dump、坏行）。
+- 自测测真函数；合成数据复现真实事故形状（413 的 `turn/end`、banner 前缀 dump、坏行、两层会话目录）。
 
 ## English
 
-`ctxlens` is a local, zero-dependency CLI that explains **where an LLM request's tokens actually went**
-and **which turn of an agent session started to blow up**. It decomposes the *top-level* request body
-(most tools only count `messages`) and groups session events by turn. Built after a real incident where a
-2.2M-token body overran a 1M window — 1.64M of it in a hidden request field that no message counter could see.
+`ctx-autopsy` is a **post-mortem** tool for dead agent sessions. Given a saved request body or a finished
+session log, it decomposes the *top-level* request fields (most tools only count `messages`, so request-level
+hidden fields stay invisible) and groups session events by turn, surfacing the last error verbatim. No proxy,
+no replay, no integration — it reads files you already have.
 
-```bash
-ctxlens request body.json --window 1048576
-ctxlens session --latest
-```
-
-Exit codes: `0` ok, `1` overflow, `2` usage/parse error.
+If you want live capture, a UI, or per-tool composition over time, use
+[context-lens](https://github.com/larsderidder/context-lens). If you want cost aggregation, use
+[ccusage](https://github.com/ccusage/ccusage).
 
 ## License
 

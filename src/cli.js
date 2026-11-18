@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ctxlens —— 看你的 agent 上下文去了哪，以及它为什么死
+ * ctx-autopsy —— 看你的 agent 上下文去了哪，以及它为什么死
  *
  * 为什么有它：一次真实事故里，一个 2.2M token 的请求撞穿了 1M 窗口，
  * 而 messages 只占 552k —— 剩下 1.64M 在一个没人数的隐藏字段里。
@@ -21,12 +21,12 @@ import { selftest } from "./selftest.js";
 const args = process.argv.slice(2);
 
 function usage() {
-  console.log(`ctxlens — where your agent's context went, and why it died
+  console.log(`ctx-autopsy — where your agent's context went, and why it died
 
 Usage:
-  ctxlens request <file.json>       拆一次请求体的顶层字段
-  ctxlens session <file.jsonl[.zstd]|--latest>   按轮次拆会话日志
-  ctxlens --selftest                跑内建自测
+  ctx-autopsy request <file.json>       拆一次请求体的顶层字段
+  ctx-autopsy session <file.jsonl[.zstd]|--latest>   按轮次拆会话日志
+  ctx-autopsy --selftest                跑内建自测
 
 Options:
   --window <n>     模型窗口，默认 1048576
@@ -147,7 +147,7 @@ function main() {
     usage();
     return 2;
   } catch (e) {
-    console.error(`ctxlens: ${e.message}`);
+    console.error(`ctx-autopsy: ${e.message}`);
     return 2;
   }
 }
