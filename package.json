@@ -1,0 +1,29 @@
+{
+  "name": "ctxlens",
+  "version": "0.1.0",
+  "description": "Where your agent's context went — and why it died. Local forensics for LLM request payloads and agent session logs.",
+  "type": "module",
+  "bin": {
+    "ctxlens": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "selftest": "node src/cli.js --selftest"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "llm",
+    "context-window",
+    "agent",
+    "forensics",
+    "tokens",
+    "debugging"
+  ],
+  "license": "MIT",
+  "files": [
+    "src",
+    "README.md"
+  ]
+}

@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+/**
+ * ctxlens —— 看你的 agent 上下文去了哪，以及它为什么死
+ *
+ * 为什么有它：一次真实事故里，一个 2.2M token 的请求撞穿了 1M 窗口，
+ * 而 messages 只占 552k —— 剩下 1.64M 在一个没人数的隐藏字段里。
+ * 现有工具要么只数 messages，要么要求你接 SDK、开代理、上 SaaS；
+ * 这里只做一件事：**从现场的原始文件里把账算清楚。**
+ *
+ * 退出码：0 正常；1 检测到超窗；2 用法/解析错误。
+ */
+
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { analyzeRequest, analyzeSession } from "./analyze.js";
+import { findLatestSession, readJsonRequest, readSession } from "./parse.js";
+import { fmtBytes, fmtTokens } from "./tokens.js";
+import { selftest } from "./selftest.js";
+
+const args = process.argv.slice(2);
+
+function usage() {
+  console.log(`ctxlens — where your agent's context went, and why it died
+
+Usage:
+  ctxlens request <file.json>       拆一次请求体的顶层字段
+  ctxlens session <file.jsonl[.zstd]|--latest>   按轮次拆会话日志
+  ctxlens --selftest                跑内建自测
+
+Options:
+  --window <n>     模型窗口，默认 1048576
+  --top <n>        列表条数，默认 5
+  --json           机器可读输出
+  --latest         取 ~/.dsh/sessions 下最新的会话日志
+
+Exit: 0 ok · 1 overflow detected · 2 usage/parse error`);
+}
+
+function opt(name, fallback) {
+  const i = args.indexOf(name);
+  if (i < 0) return fallback;
+  const v = Number(args[i + 1]);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function has(name) {
+  return args.includes(name);
+}
+
+function cmdRequest(file) {
+  const body = readJsonRequest(file);
+  const r = analyzeRequest(body, { window: opt("--window", 1_048_576) });
+  if (has("--json")) {
+    console.log(JSON.stringify({ ...r, parts: r.parts.map(({ value, ...p }) => p) }, null, 2));
+  } else {
+    console.log(`request   ${file}`);
+    console.log(
+      `total     ${fmtBytes(r.totalBytes)} · ~${fmtTokens(r.totalTokens)} tok · window ${fmtTokens(r.window)} · ${
+        r.overflow ? `OVER by ~${fmtTokens(r.overBy)}` : "fits"
+      }`,
+    );
+    console.log("\nby top-level field");
+    for (const p of r.parts) {
+      console.log(
+        `  ${p.key.padEnd(20)} ${p.kind.padEnd(9)} ${fmtBytes(p.bytes).padStart(10)}  ~${fmtTokens(p.tokens).padStart(8)}  ${(p.share * 100).toFixed(1).padStart(5)}%`,
+      );
+    }
+    if (r.hidden.length) {
+      console.log("\n⚠ 非对话字段（常规压缩碰不到，只能关掉/截断）");
+      for (const p of r.hidden) {
+        console.log(`  ${p.key} — ~${fmtTokens(p.tokens)} tok (${(p.share * 100).toFixed(1)}%)`);
+      }
+    }
+    if (r.biggest.length) {
+      console.log("\nlargest single messages (fold 的原子单位)");
+      for (const m of r.biggest) {
+        console.log(`  #${String(m.index).padEnd(4)} ${String(m.role).padEnd(10)} ${fmtBytes(m.bytes).padStart(10)}  ~${fmtTokens(m.tokens)}`);
+      }
+    }
+  }
+  return r.overflow ? 1 : 0;
+}
+
+function cmdSession(target) {
+  let file = target;
+  let latest = false;
+  if (target === "--latest" || (target === undefined && has("--latest"))) {
+    file = findLatestSession(join(homedir(), ".dsh", "sessions"));
+    latest = true;
+  }
+  if (!file || !existsSync(file)) {
+    console.error(`no such session log: ${file ?? "(none)"}`);
+    return 2;
+  }
+  const { events, badLines, format } = readSession(file);
+  const r = analyzeSession(events, { window: opt("--window", 1_048_576), badLines });
+  const top = opt("--top", 5);
+
+  if (has("--json")) {
+    console.log(JSON.stringify({ file, format, ...r }, null, 2));
+  } else {
+    const win = opt("--window", 1_048_576);
+    console.log(`session   ${file}${latest ? " (latest)" : ""}`);
+    console.log(
+      `events    ${r.totalEvents}${r.badLines ? ` · ${r.badLines} unparsable line(s)` : ""} · format ${format}`,
+    );
+    console.log(
+      `turns     ${r.turns.length} · cumulative ~${fmtTokens(r.totalTokens)} tok in this log (log bytes, not request size)`,
+    );
+    if (r.overflowTurn !== null) {
+      console.log(
+        `note      raw accumulation passed window ${fmtTokens(win)} at turn ${r.overflowTurn} — compaction may have folded history, so an actual request can be smaller`,
+      );
+    }
+    if (r.lastError) {
+      console.log(`\nlast error (turn ${r.lastError.turn})${r.lastError.code ? ` [${r.lastError.code}]` : ""}`);
+      console.log(`  ${r.lastError.message.slice(0, 400)}`);
+    }
+    console.log("\nheaviest turns");
+    for (const t of r.heaviest.slice(0, top)) {
+      console.log(`  turn ${String(t.turn).padStart(4)}  ${fmtTokens(t.tokens).padStart(9)} tok  ${String(t.events).padStart(5)} events  ${fmtBytes(t.bytes)}`);
+    }
+  }
+  // 会话模式只有"确实是一次超窗发送失败"才退 1；原始累积超窗不算证据
+  const overflowed =
+    r.lastError && (r.lastError.status === 413 || /outbound body/i.test(r.lastError.message ?? ""));
+  return overflowed ? 1 : 0;
+}
+
+function main() {
+  if (args.length === 0 || has("--help") || has("-h")) {
+    usage();
+    return 0;
+  }
+  if (has("--selftest")) {
+    const r = selftest();
+    console.log(`${r.pass} passed, ${r.fail} failed`);
+    return r.fail === 0 ? 0 : 2;
+  }
+  const cmd = args[0];
+  const target = args[1];
+  try {
+    if (cmd === "request") return cmdRequest(target);
+    if (cmd === "session") return cmdSession(target);
+    console.error(`unknown command: ${cmd}`);
+    usage();
+    return 2;
+  } catch (e) {
+    console.error(`ctxlens: ${e.message}`);
+    return 2;
+  }
+}
+
+process.exitCode = main();
