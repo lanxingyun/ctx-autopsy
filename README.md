@@ -77,9 +77,12 @@ total     924.2 KiB · ~248.0k tok · window 200.0k · OVER by ~48.0k
 ```bash
 git clone https://github.com/lanxingyun/ctx-autopsy
 cd ctx-autopsy
-node src/cli.js --help
-node test/run.js        # 22 条自测
+npm link                 # 把 ctx-autopsy 放到 PATH；不想全局链接就始终用 node src/cli.js
+ctx-autopsy --help
+node test/run.js         # 22 条自测
 ```
+
+下文示例默认 `ctx-autopsy` 已在 PATH；没链接时把命令换成 `node src/cli.js` 即可。
 
 要求 Node ≥ 22（用内置 `zlib.zstdDecompressSync` 读 `.jsonl.zstd`，不需要 zstd CLI）。
 
