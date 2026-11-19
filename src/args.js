@@ -25,12 +25,15 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (VALUE_FLAGS.has(a)) {
-      const n = Number(argv[i + 1]);
-      if (Number.isFinite(n)) {
+      const raw = argv[i + 1];
+      const n = Number(raw);
+      // 缺值 / 非数字 / 非正数都必须报错；否则 `--window abc` 会静默回落到默认窗口，
+      // 用户拿着“fits”结论却不知道窗口根本没按他的值算。
+      if (raw === undefined || raw === "" || !Number.isFinite(n) || n <= 0) {
+        out.unknown.push(a);
+      } else {
         out[a.slice(2)] = n;
         i++;
-      } else {
-        out.unknown.push(a);
       }
       continue;
     }

@@ -155,6 +155,11 @@ function main() {
     console.log(`${r.pass} passed, ${r.fail} failed`);
     return r.fail === 0 ? 0 : 2;
   }
+  if (parsed.unknown.length) {
+    console.error(`unknown or invalid option: ${parsed.unknown.join(" ")}`);
+    usage();
+    return 2;
+  }
   const cmd = parsed.cmd;
   const target = parsed.target;
   try {

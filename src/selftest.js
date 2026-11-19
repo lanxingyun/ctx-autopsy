@@ -66,6 +66,13 @@ export function selftest() {
     eq(isLatestTarget(null, false), false);
   });
 
+  check("cli: invalid or unknown options are rejected, not silently ignored", () => {
+    ok(parseArgs(["request", "req.json", "--window", "abc"]).unknown.includes("--window"));
+    ok(parseArgs(["request", "req.json", "--window"]).unknown.includes("--window"));
+    ok(parseArgs(["request", "req.json", "--top", "0"]).unknown.includes("--top"));
+    ok(parseArgs(["request", "req.json", "--bogus"]).unknown.includes("--bogus"));
+  });
+
   // ---- tokens ----
   check("ascii token estimate ~4 chars/token", () => eq(estimateTokens("hello world"), 3));
   check("cjk counts 1 token per char", () => eq(estimateTokens("你好世界"), 4));
