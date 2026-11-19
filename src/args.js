@@ -47,3 +47,11 @@ export function parseArgs(argv) {
   out.target = positional[1] ?? null;
   return out;
 }
+
+/**
+ * `--latest` 是布尔选项，解析后 target 为 null；不能再拿 target === undefined 判。
+ * 这个函数单独存在，是为了让这条 CLI 级条件能被自测直接测到。
+ */
+export function isLatestTarget(target, latest) {
+  return latest === true && (target == null || target === "--latest");
+}

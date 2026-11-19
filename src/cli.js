@@ -13,7 +13,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseArgs } from "./args.js";
+import { isLatestTarget, parseArgs } from "./args.js";
 import { analyzeRequest, analyzeSession } from "./analyze.js";
 import { findLatestSession, readJsonRequest, readSession } from "./parse.js";
 import { prescribe } from "./prescribe.js";
@@ -102,7 +102,7 @@ function cmdRequest(file) {
 function cmdSession(target) {
   let file = target;
   let latest = false;
-  if (target === "--latest" || (target === undefined && has("--latest"))) {
+  if (isLatestTarget(target, has("--latest"))) {
     file = findLatestSession(join(homedir(), ".dsh", "sessions"));
     latest = true;
   }

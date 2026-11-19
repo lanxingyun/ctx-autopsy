@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, utimesSync, rmSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { analyzeRequest, analyzeSession, biggestMessages, classifyKey, decomposeRequest } from "./analyze.js";
-import { parseArgs } from "./args.js";
+import { isLatestTarget, parseArgs } from "./args.js";
 import { findLatestSession, readJsonRequest, readSession, stripBanner } from "./parse.js";
 import { prescribe } from "./prescribe.js";
 import { estimateTokens } from "./tokens.js";
@@ -57,6 +57,13 @@ export function selftest() {
     eq(p.target, "req.json");
     eq(p.window, 100);
     ok(p.json);
+  });
+
+  check("cli: --latest with no target is a latest request", () => {
+    ok(isLatestTarget(null, true));
+    ok(isLatestTarget(undefined, true));
+    eq(isLatestTarget("session.jsonl", true), false);
+    eq(isLatestTarget(null, false), false);
   });
 
   // ---- tokens ----
