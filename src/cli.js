@@ -13,6 +13,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parseArgs } from "./args.js";
 import { analyzeRequest, analyzeSession } from "./analyze.js";
 import { findLatestSession, readJsonRequest, readSession } from "./parse.js";
 import { prescribe } from "./prescribe.js";
@@ -20,6 +21,7 @@ import { fmtBytes, fmtTokens } from "./tokens.js";
 import { selftest } from "./selftest.js";
 
 const args = process.argv.slice(2);
+const parsed = parseArgs(args);
 
 function usage() {
   console.log(`ctx-autopsy — where your agent's context went, and why it died
@@ -34,19 +36,17 @@ Options:
   --top <n>        列表条数，默认 5
   --json           机器可读输出
   --latest         取 ~/.dsh/sessions 下最新的会话日志
+  --prescribe      即使未超窗也打印处方
 
 Exit: 0 ok · 1 overflow detected · 2 usage/parse error`);
 }
 
 function opt(name, fallback) {
-  const i = args.indexOf(name);
-  if (i < 0) return fallback;
-  const v = Number(args[i + 1]);
-  return Number.isFinite(v) ? v : fallback;
+  return parsed[name.slice(2)] ?? fallback;
 }
 
 function has(name) {
-  return args.includes(name);
+  return parsed[name.slice(2)] === true;
 }
 
 function cmdRequest(file) {
@@ -155,8 +155,8 @@ function main() {
     console.log(`${r.pass} passed, ${r.fail} failed`);
     return r.fail === 0 ? 0 : 2;
   }
-  const cmd = args[0];
-  const target = args[1];
+  const cmd = parsed.cmd;
+  const target = parsed.target;
   try {
     if (cmd === "request") return cmdRequest(target);
     if (cmd === "session") return cmdSession(target);

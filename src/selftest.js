@@ -9,6 +9,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, utimesSync, rmSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { analyzeRequest, analyzeSession, biggestMessages, classifyKey, decomposeRequest } from "./analyze.js";
+import { parseArgs } from "./args.js";
 import { findLatestSession, readJsonRequest, readSession, stripBanner } from "./parse.js";
 import { prescribe } from "./prescribe.js";
 import { estimateTokens } from "./tokens.js";
@@ -34,6 +35,29 @@ export function selftest() {
   const ok = (v, msg = "expected truthy") => {
     if (!v) throw new Error(msg);
   };
+
+  // ---- CLI args ----
+  check("cli: options before positional keep the file", () => {
+    const p = parseArgs(["request", "--prescribe", "req.json"]);
+    eq(p.cmd, "request");
+    eq(p.target, "req.json");
+    ok(p.prescribe);
+  });
+
+  check("cli: session --window before --latest", () => {
+    const p = parseArgs(["session", "--window", "100", "--latest"]);
+    eq(p.cmd, "session");
+    eq(p.target, null);
+    eq(p.window, 100);
+    ok(p.latest);
+  });
+
+  check("cli: numeric option after target", () => {
+    const p = parseArgs(["request", "req.json", "--window", "100", "--json"]);
+    eq(p.target, "req.json");
+    eq(p.window, 100);
+    ok(p.json);
+  });
 
   // ---- tokens ----
   check("ascii token estimate ~4 chars/token", () => eq(estimateTokens("hello world"), 3));
