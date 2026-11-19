@@ -68,7 +68,7 @@ total     924.2 KiB · ~248.0k tok · window 200.0k · OVER by ~48.0k
 - **安全档（cap-field）**：只对超过 512 KiB 的请求级隐藏字段提议——它通常不是对话内容，压它不丢上下文。
 - **中等档（drop-tool）**：只建议"省得动"的工具定义（省不到缺口 2% 的不值得用能力面去换）。
 - **有损档（fold-history）**：折叠最旧的消息，按比例标 `medium`/`high` 风险。
-- **救不了的情况会明说**：单条消息本身就超过窗口时，折叠等于截断内容——必须让生产方拆分那条消息。
+- **救不了的情况会明说**：单条消息本身就超过窗口时，折叠等于截断内容——必须让生产方拆分；可能不止一条，处方会全部列出。
 
 ## 安装
 
@@ -79,7 +79,7 @@ git clone https://github.com/lanxingyun/ctx-autopsy
 cd ctx-autopsy
 npm link                 # 把 ctx-autopsy 放到 PATH；不想全局链接就始终用 node src/cli.js
 ctx-autopsy --help
-node test/run.js         # 22 条自测
+node test/run.js         # 23 条自测
 ```
 
 下文示例默认 `ctx-autopsy` 已在 PATH；没链接时把命令换成 `node src/cli.js` 即可。

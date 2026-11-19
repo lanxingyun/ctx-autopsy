@@ -196,6 +196,21 @@ export function selftest() {
     eq(p.fitsByPlan, false);
   });
 
+  check("flags every oversized message, not just the largest", () => {
+    const body = {
+      messages: [
+        { role: "user", content: "甲".repeat(200) },
+        { role: "assistant", content: "乙".repeat(200) },
+      ],
+    };
+    const a = analyzeRequest(body, { window: 100 });
+    const p = prescribe(body, a, { window: 100 });
+    ok(p.unsplittable?.includes("#0"), "should name #0");
+    ok(p.unsplittable?.includes("#1"), "should name #1");
+    ok(!p.steps.some((s) => s.kind === "fold-history"), "must not fold oversized messages");
+    eq(p.fitsByPlan, false);
+  });
+
   // ---- parsing ----
   check("stripBanner finds first brace", () => {
     eq(stripBanner('PLAINTEXT DUMP\nheader\n{"a":1}'), '{"a":1}');

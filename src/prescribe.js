@@ -82,40 +82,49 @@ export function prescribe(body, analysis, { window = 1_048_576 } = {}) {
   }
 
   // 3) 折叠最旧的历史：按消息顺序累加，直到够
-  //    单条就超过窗口的消息不能靠"折叠"解决（折叠它等于截断内容），跳过并单列
-  const oversizedIndex =
-    analysis.biggest[0] && analysis.biggest[0].tokens > window ? analysis.biggest[0].index : -1;
+  //    单条就超过窗口的消息不能靠"折叠"解决（折叠它等于截断内容），
+  //    要跳过**所有**这样的消息，而不是只跳过最大的那条。
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const messageTokens = messages.map((m) =>
+    estimateTokens(typeof m === "string" ? m : JSON.stringify(m) ?? "")
+  );
+  const oversized = [];
+  messageTokens.forEach((tok, index) => {
+    if (tok > window) oversized.push({ index, role: messages[index]?.role ?? "?", tokens: tok });
+  });
+  const oversizedIndexes = new Set(oversized.map((o) => o.index));
+
   if (remaining > window) {
-    const msgs = Array.isArray(body?.messages) ? body.messages : [];
     let acc = 0;
     let folded = 0;
-    for (let i = 0; i < msgs.length; i++) {
+    for (let i = 0; i < messages.length; i++) {
       if (remaining <= window) break;
-      if (i === oversizedIndex) continue;
-      const m = msgs[i];
-      const tok = estimateTokens(typeof m === "string" ? m : JSON.stringify(m) ?? "");
+      if (oversizedIndexes.has(i)) continue;
+      const tok = messageTokens[i];
       acc += tok;
       folded += 1;
       remaining -= tok;
     }
     if (folded > 0) {
-      const ratio = msgs.length ? folded / msgs.length : 1;
+      const ratio = messages.length ? folded / messages.length : 1;
       steps.push({
         kind: "fold-history",
         folded,
-        total: msgs.length,
+        total: messages.length,
         saves: acc,
         risk: ratio > 0.5 ? "high" : "medium",
-        note: `折叠最旧的 ${folded}/${msgs.length} 条消息（${ratio > 0.5 ? "会丢掉大部分早期上下文" : "会丢掉早期上下文"}）`,
+        note: `折叠最旧的 ${folded}/${messages.length} 条消息（${ratio > 0.5 ? "会丢掉大部分早期上下文" : "会丢掉早期上下文"}）`,
       });
     }
   }
 
-  // 单条消息就超过窗口：折叠救不了，必须让生产方拆分
-  const largest = analysis.biggest[0];
+  // 单条消息就超过窗口：折叠救不了，必须让生产方拆分。
+  // 可能不止一条，全部列出，否则修完最大那条仍会爆。
   const unsplittable =
-    remaining > window && largest && largest.tokens > window
-      ? `单条消息 #${largest.index}（${largest.role}）约 ${largest.tokens} tok，已超过窗口本身——折叠无法解决，必须让生产方拆分这条消息`
+    remaining > window && oversized.length
+      ? oversized
+          .map((o) => `单条消息 #${o.index}（${o.role}）约 ${o.tokens} tok，已超过窗口本身`)
+          .join("；") + "——折叠无法解决，必须让生产方拆分这些消息"
       : null;
 
   const fits = remaining <= window;
