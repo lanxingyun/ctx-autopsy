@@ -165,8 +165,18 @@ function main() {
     usage();
     return 2;
   }
+  if (parsed.cmd === "request" && has("--latest")) {
+    console.error("--latest is only valid for session");
+    usage();
+    return 2;
+  }
   if (has("--latest") && parsed.target) {
     console.error("--latest cannot be combined with a session file");
+    usage();
+    return 2;
+  }
+  if (parsed.cmd === "session" && has("--prescribe")) {
+    console.error("--prescribe is only valid for request");
     usage();
     return 2;
   }

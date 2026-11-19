@@ -51,7 +51,10 @@ try {
   run("invalid window", ["request", req, "--window", "abc"], 2, /unknown or invalid option: --window/);
   run("unknown flag", ["request", req, "--bogus"], 2, /unknown or invalid option: --bogus/);
   run("extra positional", ["request", req, "extra.json"], 2, /unexpected argument\(s\): extra.json/);
-  run("latest + file", ["request", req, "--latest"], 2, /cannot be combined/);
+  run("latest on request", ["request", req, "--latest"], 2, /--latest is only valid for session/);
+  run("latest without file on request", ["request", "--latest"], 2, /--latest is only valid for session/);
+  run("prescribe on session", ["session", req, "--prescribe"], 2, /--prescribe is only valid for request/);
+  run("latest + file on session", ["session", req, "--latest"], 2, /cannot be combined/);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
