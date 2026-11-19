@@ -40,7 +40,7 @@ export function decomposeRequest(body) {
   return { parts, totalBytes, totalTokens };
 }
 
-/** 单条消息里最大的那几条 —— 它们通常是"压不动"的单元 */
+/** 单条消息里最大的那几条 —— 它们通常是"压不动"的单元。按 token 排，不按字节：CJK 一字一 token，字节会低估它。 */
 export function biggestMessages(messages, top = 5) {
   if (!Array.isArray(messages)) return [];
   return messages
@@ -53,7 +53,7 @@ export function biggestMessages(messages, top = 5) {
         tokens: estimateTokens(text),
       };
     })
-    .sort((a, b) => b.bytes - a.bytes)
+    .sort((a, b) => b.tokens - a.tokens || b.bytes - a.bytes)
     .slice(0, top);
 }
 

@@ -78,7 +78,7 @@ total     924.2 KiB · ~248.0k tok · window 200.0k · OVER by ~48.0k
 git clone https://github.com/lanxingyun/ctx-autopsy
 cd ctx-autopsy
 node src/cli.js --help
-node test/run.js        # 21 条自测
+node test/run.js        # 22 条自测
 ```
 
 要求 Node ≥ 22（用内置 `zlib.zstdDecompressSync` 读 `.jsonl.zstd`，不需要 zstd CLI）。

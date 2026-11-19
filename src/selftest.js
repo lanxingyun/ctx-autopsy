@@ -182,6 +182,20 @@ export function selftest() {
     eq(p.fitsByPlan, false);
   });
 
+  check("finds the oversized message by tokens, not bytes", () => {
+    const body = {
+      messages: [
+        { role: "user", content: "a".repeat(4_000) }, // ~1,000 tok, 4,000 B
+        { role: "user", content: "字".repeat(1_200) }, // ~1,200 tok, 3,600 B
+      ],
+    };
+    const a = analyzeRequest(body, { window: 1_100 });
+    eq(a.biggest[0].index, 1);
+    const p = prescribe(body, a, { window: 1_100 });
+    ok(p.unsplittable, "should flag the 1,200-token message");
+    eq(p.fitsByPlan, false);
+  });
+
   // ---- parsing ----
   check("stripBanner finds first brace", () => {
     eq(stripBanner('PLAINTEXT DUMP\nheader\n{"a":1}'), '{"a":1}');
