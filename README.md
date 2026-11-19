@@ -82,6 +82,8 @@ ctx-autopsy --help
 npm test                 # 29 条单元自测 + 10 条 CLI 契约
 ```
 
+变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
 下文示例默认 `ctx-autopsy` 已在 PATH；没链接时把命令换成 `node src/cli.js` 即可。
 
 要求 Node ≥ 22（用内置 `zlib.zstdDecompressSync` 读 `.jsonl.zstd`，不需要 zstd CLI）。
