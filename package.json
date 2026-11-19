@@ -1,13 +1,13 @@
 {
   "name": "ctx-autopsy",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Post-mortem for dead agent sessions: read a saved LLM request body or session log and see where the tokens went and why it died. No proxy, no replay.",
   "type": "module",
   "bin": {
     "ctx-autopsy": "src/cli.js"
   },
   "scripts": {
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/cli.js",
     "selftest": "node src/cli.js --selftest"
   },
   "engines": {
@@ -25,6 +25,7 @@
   "license": "MIT",
   "files": [
     "src",
+    "test",
     "README.md",
     "LICENSE"
   ]

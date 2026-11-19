@@ -79,7 +79,7 @@ git clone https://github.com/lanxingyun/ctx-autopsy
 cd ctx-autopsy
 npm link                 # 把 ctx-autopsy 放到 PATH；不想全局链接就始终用 node src/cli.js
 ctx-autopsy --help
-node test/run.js         # 29 条自测
+npm test                 # 29 条单元自测 + 7 条 CLI 契约
 ```
 
 下文示例默认 `ctx-autopsy` 已在 PATH；没链接时把命令换成 `node src/cli.js` 即可。
