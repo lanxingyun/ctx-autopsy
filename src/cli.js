@@ -160,6 +160,16 @@ function main() {
     usage();
     return 2;
   }
+  if (parsed.extra.length) {
+    console.error(`unexpected argument(s): ${parsed.extra.join(" ")}`);
+    usage();
+    return 2;
+  }
+  if (has("--latest") && parsed.target) {
+    console.error("--latest cannot be combined with a session file");
+    usage();
+    return 2;
+  }
   const cmd = parsed.cmd;
   const target = parsed.target;
   try {

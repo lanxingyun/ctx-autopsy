@@ -48,6 +48,7 @@ export function parseArgs(argv) {
 
   out.cmd = positional[0] ?? null;
   out.target = positional[1] ?? null;
+  out.extra = positional.slice(2);
   return out;
 }
 

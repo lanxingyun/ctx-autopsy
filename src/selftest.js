@@ -73,6 +73,12 @@ export function selftest() {
     ok(parseArgs(["request", "req.json", "--bogus"]).unknown.includes("--bogus"));
   });
 
+  check("cli: extra positionals are reported, not silently dropped", () => {
+    const p = parseArgs(["request", "a.json", "b.json"]);
+    eq(p.target, "a.json");
+    eq(p.extra.join(","), "b.json");
+  });
+
   // ---- tokens ----
   check("ascii token estimate ~4 chars/token", () => eq(estimateTokens("hello world"), 3));
   check("cjk counts 1 token per char", () => eq(estimateTokens("你好世界"), 4));
