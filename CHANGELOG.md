@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — 2026-11-20
+
+- Package the changelog that README links to: `CHANGELOG.md` is now in `files`; the npm tarball
+  contains it instead of a dead link.
+
 ## 0.3.0 — 2026-11-20
 
 - CLI options are command-scoped: `--latest` is valid only for `session`, `--prescribe` only for `request`.
